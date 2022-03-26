@@ -1,3 +1,5 @@
+#include <chrono>
+#include <iomanip>
 #include <iostream>
 
 namespace echo_reverse_server::logging {
@@ -28,7 +30,8 @@ constexpr auto ToString(LoggerType type)
 struct Logger {
     Logger(LoggerType type)
     {
-        std::cout << "[" << ToString(type) << "]\t";
+        std::time_t result = std::time(nullptr);
+        std::cout << result << " [" << std::setw(7) << ToString(type) << "] ";
     }
     template <typename Type>
     Logger& operator<<(Type&& value)
@@ -41,7 +44,9 @@ struct Logger {
 
 } // namespace echo_reverse_server::logging
 
-#define LOG_INFO() echo_reverse_server::logging::Logger(echo_reverse_server::logging::LoggerType::Info)
-#define LOG_WARNING() echo_reverse_server::logging::Logger(echo_reverse_server::logging::LoggerType::Warning)
-#define LOG_ERROR() echo_reverse_server::logging::Logger(echo_reverse_server::logging::LoggerType::Error)
-#define LOG_CRITICAL() echo_reverse_server::logging::Logger(echo_reverse_server::logging::LoggerType::Critical)
+#define LOG(level) echo_reverse_server::logging::Logger(level)
+
+#define LOG_INFO() LOG(echo_reverse_server::logging::LoggerType::Info)
+#define LOG_WARNING() LOG(echo_reverse_server::logging::LoggerType::Warning)
+#define LOG_ERROR() LOG(echo_reverse_server::logging::LoggerType::Error)
+#define LOG_CRITICAL() LOG(echo_reverse_server::logging::LoggerType::Critical)
