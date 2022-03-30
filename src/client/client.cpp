@@ -42,7 +42,7 @@ int main()
 
     // LOG_INFO() << fmt::format("{}", std::vector<uint8_t>(buffer, buffer + bytes_read));
     for (size_t i = 0; i < bytes_read; ++i)
-        std::cout << buffer[i] << ", ";
+        std::cout << static_cast<unsigned>(buffer[i]) << ", ";
 
     return EXIT_SUCCESS;
 }
