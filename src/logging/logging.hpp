@@ -39,14 +39,17 @@ struct Logger {
         std::cout << value;
         return *this;
     }
-    ~Logger() { std::cout << "\n"; }
+    ~Logger()
+    {
+        std::cout << "\n";
+    }
 };
 
 } // namespace echo_reverse_server::logging
 
-#define LOG(level) echo_reverse_server::logging::Logger(level)
+#define INTERNAL_LOG(level) echo_reverse_server::logging::Logger(level)
 
-#define LOG_INFO() LOG(echo_reverse_server::logging::LoggerType::Info)
-#define LOG_WARNING() LOG(echo_reverse_server::logging::LoggerType::Warning)
-#define LOG_ERROR() LOG(echo_reverse_server::logging::LoggerType::Error)
-#define LOG_CRITICAL() LOG(echo_reverse_server::logging::LoggerType::Critical)
+#define LOG_INFO() INTERNAL_LOG(echo_reverse_server::logging::LoggerType::Info)
+#define LOG_WARNING() INTERNAL_LOG(echo_reverse_server::logging::LoggerType::Warning)
+#define LOG_ERROR() INTERNAL_LOG(echo_reverse_server::logging::LoggerType::Error)
+#define LOG_CRITICAL() INTERNAL_LOG(echo_reverse_server::logging::LoggerType::Critical)

@@ -1,4 +1,4 @@
-#include "logging/logging.hpp"
+#include "logging.hpp"
 
 #include <algorithm>
 #include <array>
@@ -45,18 +45,24 @@ int main()
         LOG_CRITICAL() << "Failed to accept new connection";
         return EXIT_FAILURE;
     }
-    std::array<uint8_t, 1024> buffer;
-    std::vector<uint8_t> result_data;
+    std::array<int8_t, 1024> buffer;
     size_t bytes_read;
     LOG_INFO() << "Reading bytes";
-    while ((bytes_read = read(client_socket, buffer.data(), buffer.size())) > 0) {
-        result_data.insert(result_data.end(), buffer.begin(), buffer.begin() + bytes_read);
-        if (buffer[bytes_read - 1] == 0) {
-            break;
-        }
-    }
-    LOG_INFO() << "Success";
-    for (auto item : result_data) {
-        LOG_INFO() << item << ' ';
-    }
+    bytes_read = read(client_socket, buffer.data(), buffer.size());
+    // while (() > 0) {
+    //     result_data.insert(result_data.end(), buffer.begin(), buffer.begin() + bytes_read);
+    //     if (buffer[bytes_read - 1] == 0) {
+    //         break;
+    //     }
+    // }
+    std::vector<int8_t> result_data;
+    std::reverse_copy(buffer.begin(), buffer.begin() + bytes_read, std::back_inserter(result_data));
+    send(client_socket, result_data.data(), result_data.size(), 0);
+    LOG_INFO() << "Success" << result_data.size();
+    for (int i = 0; i < bytes_read; ++i)
+        std::cout << buffer[i] << ' ';
+    std::cout << std::endl;
+    LOG_INFO() << "Finish";
+    close(server_fd);
+    return EXIT_SUCCESS;
 }
