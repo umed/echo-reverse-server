@@ -4,4 +4,4 @@ set(TARGET_NAME echo_reverse_server)
 
 add_executable(${TARGET_NAME} server.cpp)
 
-target_link_libraries(${TARGET_NAME} logging)
+target_link_libraries(${TARGET_NAME} logging fmt::fmt)

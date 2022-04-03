@@ -1,3 +1,8 @@
 BasedOnStyle: WebKit
 
 FixNamespaceComments: true
+ColumnLimit: 120
+AllowShortFunctionsOnASingleLine: Empty
+BinPackArguments: false
+BinPackParameters: false
+AlwaysBreakTemplateDeclarations: Yes

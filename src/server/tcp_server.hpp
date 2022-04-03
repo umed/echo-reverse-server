@@ -5,6 +5,7 @@
 // #include <fmt/format.h>
 
 #include <cerrno>
+#include <memory>
 #include <stdexcept>
 
 #include <netinet/in.h>
@@ -13,25 +14,44 @@
 
 namespace echo_reverse_server::net {
 
+struct Connection {
+    utils::FileDescriptorHolder fd;
+    sockaddr_in address;
+
+    uint32_t AddressSize()
+    {
+        return sizeof(address);
+    }
+
+    sockaddr* Sockaddr()
+    {
+        return reinterpret_cast<sockaddr*>(&address);
+    }
+};
+
+using ConnectionPtr = std::shared_ptr<Connection>;
+
 class TcpServer {
 public:
     TcpServer(uint16_t port, int max_connection_number)
         : max_connection_number(max_connection_number)
+        , connection(std::make_shared<net::Connection>())
     {
-        server_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_fd < 0) {
+        connection->fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+        if (!connection->fd.IsValid()) {
             throw std::runtime_error("Failed to create socket");
         }
 
+        auto& address = connection->address;
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = INADDR_ANY;
         address.sin_port = htons(port);
 
         int opt = 1;
-        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        if (setsockopt(connection->fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
             throw std::runtime_error("Failed to set socket options");
         }
-        if (bind(server_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0) {
+        if (bind(connection->fd, connection->Sockaddr(), connection->AddressSize()) < 0) {
             throw std::runtime_error("Failed to bind socket to address");
         }
     }
@@ -45,25 +65,29 @@ public:
 
     void Start()
     {
-        if (listen(server_fd, max_connection_number) < 0) {
+        if (listen(connection->fd, max_connection_number) < 0) {
             throw std::runtime_error("Failed to listen for connections");
         }
     }
 
     TcpClient Accept()
     {
-        uint32_t addrlen = sizeof(address);
-        utils::FileDescriptorHolder client_socket = accept(server_fd, reinterpret_cast<sockaddr*>(&address), &addrlen);
-        if (client_socket < 0) {
+        uint32_t addrlen = connection->AddressSize();
+        utils::FileDescriptorHolder client_socket = accept(connection->fd, connection->Sockaddr(), &addrlen);
+        if (!client_socket.IsValid()) {
             throw std::runtime_error("Failed to accept new connection");
         }
         return TcpClient(std::move(client_socket));
     }
 
+    ConnectionPtr Connection()
+    {
+        return connection;
+    }
+
 private:
     int max_connection_number;
-    utils::FileDescriptorHolder server_fd;
-    sockaddr_in address;
+    ConnectionPtr connection;
 };
 
 } // namespace echo_reverse_server::net

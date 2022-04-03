@@ -8,9 +8,11 @@ struct FileDescriptorHolder {
     constexpr static int INVALID_FILE_DESCRIPTOR = -1;
 
     FileDescriptorHolder()
-        : fd(-1)
+        : fd(INVALID_FILE_DESCRIPTOR)
     {
     }
+
+    FileDescriptorHolder(const FileDescriptorHolder&) = delete;
     FileDescriptorHolder(int fd)
         : fd(fd)
     {
@@ -26,9 +28,21 @@ struct FileDescriptorHolder {
         other.fd = INVALID_FILE_DESCRIPTOR;
     }
 
+    bool IsValid()
+    {
+        return fd > 0;
+    }
+
+    int Release()
+    {
+        int return_fd = fd;
+        fd = INVALID_FILE_DESCRIPTOR;
+        return return_fd;
+    }
+
     ~FileDescriptorHolder()
     {
-        if (fd > -1) {
+        if (IsValid()) {
             close(fd);
         }
     }

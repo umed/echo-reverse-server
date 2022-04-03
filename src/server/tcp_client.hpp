@@ -1,5 +1,6 @@
 #pragma once
 
+#include "exceptions.hpp"
 #include "file_descriptor_holder.hpp"
 
 #include <array>
@@ -18,14 +19,14 @@ public:
     }
 
     template <size_t buffer_size>
-    size_t Read(std::array<uint8_t, buffer_size>& buffer)
+    ssize_t Recveive(std::array<uint8_t, buffer_size>& buffer)
     {
-        // TODO: user errno
-        ssize_t bytes_read = read(fd, buffer.data(), buffer.size());
-        // ssize_t bytes_read = recv(fd, buffer.data(), buffer.size(), 0);
+        ssize_t bytes_read = recv(fd, buffer.data(), buffer.size(), 0);
         if (bytes_read < 0) {
-            LOG_ERROR() << std::strerror(errno);
-            throw std::runtime_error("Failed to read bytes");
+            if (errno == EAGAIN) {
+                return 0;
+            }
+            throw KernelError("Failed to read bytes");
         }
         return bytes_read;
     }
@@ -36,7 +37,6 @@ public:
         send(fd, buffer.data(), count, 0);
     }
 
-private:
     utils::FileDescriptorHolder fd;
 };
 
