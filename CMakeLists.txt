@@ -7,7 +7,6 @@ if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "CMAKE_BUILD_TYPE is not defined. ${CMAKE_BUILD_TYPE} will be used.")
 endif()
 
-set (CMAKE_C_STANDARD 17)
 set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 

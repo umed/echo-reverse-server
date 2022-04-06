@@ -6,6 +6,7 @@
 
 #include <cerrno>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 
 #include <netinet/in.h>
@@ -33,7 +34,7 @@ using ConnectionPtr = std::shared_ptr<Connection>;
 
 class TcpServer {
 public:
-    TcpServer(uint16_t port, int max_connection_number)
+    TcpServer(uint16_t port, int max_connection_number, bool is_non_blocking = true)
         : max_connection_number(max_connection_number)
         , connection(std::make_shared<net::Connection>())
     {
@@ -51,8 +52,13 @@ public:
         if (setsockopt(connection->fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
             throw std::runtime_error("Failed to set socket options");
         }
+
         if (bind(connection->fd, connection->Sockaddr(), connection->AddressSize()) < 0) {
             throw std::runtime_error("Failed to bind socket to address");
+        }
+
+        if (is_non_blocking) {
+            utils::SetNonBlocking(connection->fd);
         }
     }
 
@@ -70,14 +76,17 @@ public:
         }
     }
 
-    TcpClient Accept()
+    std::optional<TcpClient> Accept()
     {
         uint32_t addrlen = connection->AddressSize();
         utils::FileDescriptorHolder client_socket = accept(connection->fd, connection->Sockaddr(), &addrlen);
         if (!client_socket.IsValid()) {
-            throw std::runtime_error("Failed to accept new connection");
+            if (utils::WouldBlock()) {
+                return std::nullopt;
+            }
+            throw KernelError("Failed to accept new connection");
         }
-        return TcpClient(std::move(client_socket));
+        return std::make_optional<TcpClient>(std::move(client_socket));
     }
 
     ConnectionPtr Connection()
