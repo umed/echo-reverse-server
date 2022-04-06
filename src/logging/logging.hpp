@@ -31,7 +31,7 @@ struct Logger {
     Logger(LoggerType type)
     {
         std::time_t result = std::time(nullptr);
-        std::cout << result << " [" << ToString(type) << std::setw(10) << "] ";
+        std::cout << result << " [" << ToString(type) << std::setw(5) << std::left << "] ";
     }
     template <typename Type>
     Logger& operator<<(Type&& value)

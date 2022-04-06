@@ -1,6 +1,6 @@
 #pragma once
 
-#include "file_descriptor_holder.hpp"
+#include "utils/file_descriptor_holder.hpp"
 
 #include <sys/epoll.h>
 
@@ -13,9 +13,9 @@ bool ShouldWaitForNewEvents();
 struct Epoller {
     using EventHandler = std::function<void(const epoll_event&)>;
 
-    Epoller(int max_events = 64);
+    Epoller(int connection_fd, int max_events = 64);
 
-    void Poll(int connection_fd, const EventHandler& event_consumer);
+    void Wait(const EventHandler& event_consumer);
 
     void Add(int fd_to_add, bool restart = false, void* data = nullptr);
 

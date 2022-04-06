@@ -1,7 +1,7 @@
 #include "epoller.hpp"
 
-#include "exceptions.hpp"
 #include "logging.hpp"
+#include "utils/exceptions.hpp"
 
 #include <vector>
 
@@ -30,7 +30,7 @@ void HandleEvents(const EpollEvents& events, int size, const Epoller::EventHandl
     });
 }
 
-int Wait(int fd, EpollEvents& events, bool untill_event = true)
+int RunWaitLoop(int fd, EpollEvents& events, bool untill_event = true)
 {
     int events_number;
     do {
@@ -49,7 +49,7 @@ bool ShouldWaitForNewEvents()
     return errno == EAGAIN || errno == EWOULDBLOCK;
 }
 
-Epoller::Epoller(int max_events)
+Epoller::Epoller(int connection_fd, int max_events)
     : fd(epoll_create1(0))
     , max_events(max_events)
 {
@@ -59,17 +59,21 @@ Epoller::Epoller(int max_events)
     if (max_events < 0) {
         throw KernelError("Max events size must be bigger than 0");
     }
+    Initialize(fd, connection_fd);
 }
 
 using EventHandler = std::function<void(const epoll_event&)>;
 
-void Epoller::Poll(int connection_fd, const EventHandler& event_consumer)
+void Epoller::Wait(const EventHandler& event_consumer)
 {
-    Initialize(fd, connection_fd);
     EpollEvents events(max_events);
     for (;;) {
-        int events_received = Wait(fd, events);
-        HandleEvents(std::move(events), events_received, event_consumer);
+        try {
+            int events_received = RunWaitLoop(fd, events);
+            HandleEvents(std::move(events), events_received, event_consumer);
+        } catch (const KernelError& e) {
+            LOG_ERROR() << e.what();
+        }
     }
 }
 
