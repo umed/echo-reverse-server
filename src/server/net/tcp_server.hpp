@@ -9,6 +9,9 @@
 
 namespace echo_reverse_server::net {
 
+constexpr uint16_t PORT = 9000;
+constexpr int MAX_CONNECTION_NUMBER = 1024;
+
 struct Connection {
     utils::FileDescriptorHolder fd;
     sockaddr_in address;

@@ -8,12 +8,14 @@
 
 namespace echo_reverse_server::events {
 
+constexpr auto MAX_EVENT_NUMBER = 64;
+
 bool ShouldWaitForNewEvents();
 
 struct Epoller {
     using EventHandler = std::function<void(const epoll_event&)>;
 
-    Epoller(int connection_fd, int max_events = 64);
+    Epoller(int connection_fd, int max_events = MAX_EVENT_NUMBER);
 
     void Wait(const EventHandler& event_consumer);
 

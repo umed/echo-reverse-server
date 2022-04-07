@@ -1,13 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(TARGET_NAME echo_reverse_server)
+find_package(Threads REQUIRED)
 
-# set(HEADERS
-#         event_handlers
-#         events
-#         net
-#         utils
-# )
+set(TARGET_NAME echo_reverse_server)
 
 set(SOURCES
         main.cpp
@@ -21,4 +16,4 @@ add_executable(${TARGET_NAME} ${SOURCES})
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
-target_link_libraries(${TARGET_NAME} logging fmt::fmt)
+target_link_libraries(${TARGET_NAME} PRIVATE fmt::fmt CLI11 Threads::Threads spdlog)

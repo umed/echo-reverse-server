@@ -2,6 +2,8 @@
 
 #include "exceptions.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <unistd.h>
@@ -10,6 +12,7 @@ namespace echo_reverse_server::utils {
 
 bool WouldBlock()
 {
+    SPDLOG_INFO("Would block: {}", std::strerror(errno));
     return errno == EAGAIN || errno == EWOULDBLOCK;
 }
 

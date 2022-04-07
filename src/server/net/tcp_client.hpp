@@ -3,13 +3,24 @@
 #include "utils/exceptions.hpp"
 #include "utils/file_descriptor_holder.hpp"
 
+#include <fmt/format.h>
+
 #include <array>
+#include <stdexcept>
+#include <string_view>
 #include <variant>
 
 #include <sys/socket.h>
 #include <sys/types.h>
 
 namespace echo_reverse_server::net {
+
+struct ConnectionLost : public std::runtime_error {
+    ConnectionLost(const std::string& error)
+        : std::runtime_error(error)
+    {
+    }
+};
 
 enum class ClientStatus { Reschedule, Close };
 
@@ -40,7 +51,11 @@ struct TcpClient {
     template <size_t buffer_size>
     void Write(std::array<uint8_t, buffer_size>& buffer, size_t count) const
     {
-        send(fd, buffer.data(), count, 0);
+        ssize_t bytes_sent = send(fd, buffer.data(), count, MSG_NOSIGNAL);
+        if (bytes_sent < 0 && errno == EPIPE) {
+            throw ConnectionLost(
+                fmt::format("Failed to send data, connection has been lost. errno: {}", std::strerror(errno)));
+        }
     }
 
     utils::FileDescriptorHolder fd;

@@ -1,7 +1,8 @@
 #include "epoller.hpp"
 
-#include "logging.hpp"
 #include "utils/exceptions.hpp"
+
+#include <spdlog/spdlog.h>
 
 #include <vector>
 
@@ -72,7 +73,7 @@ void Epoller::Wait(const EventHandler& event_consumer)
             int events_received = RunWaitLoop(fd, events);
             HandleEvents(std::move(events), events_received, event_consumer);
         } catch (const KernelError& e) {
-            LOG_ERROR() << e.what();
+            SPDLOG_ERROR(e.what());
         }
     }
 }
