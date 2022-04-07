@@ -79,7 +79,7 @@ int main(int argc, char** argv)
     event_handlers::SynchrnoziedConsumers consumers;
     auto waiter = [&epoller, &server, &consumers](const epoll_event& event) {
         try {
-            SPDLOG_INFO("Event received for fd: {}", event.data.fd);
+            SPDLOG_INFO("Event received for fd: {}, event: {:x}", event.data.fd, event.events);
             if (event_handlers::ShouldCloseConnection(event)) {
                 event_handlers::HandleDisconnect(epoller, server, consumers, event);
             } else if (event.data.fd == server.Connection()->fd) {

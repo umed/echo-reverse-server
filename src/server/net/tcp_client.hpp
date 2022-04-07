@@ -4,6 +4,7 @@
 #include "utils/file_descriptor_holder.hpp"
 
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include <array>
 #include <stdexcept>
@@ -52,9 +53,14 @@ struct TcpClient {
     void Write(std::array<uint8_t, buffer_size>& buffer, size_t count) const
     {
         ssize_t bytes_sent = send(fd, buffer.data(), count, MSG_NOSIGNAL);
-        if (bytes_sent < 0 && errno == EPIPE) {
-            throw ConnectionLost(
-                fmt::format("Failed to send data, connection has been lost. errno: {}", std::strerror(errno)));
+        if (bytes_sent < 0) {
+            if (errno == EPIPE) {
+                throw ConnectionLost(
+                    fmt::format("Failed to send data, connection has been lost. errno: {}", std::strerror(errno)));
+            } else {
+                throw ConnectionLost(
+                    fmt::format("Failed to send data, unexpected error. errno: {}", std::strerror(errno)));
+            }
         }
     }
 

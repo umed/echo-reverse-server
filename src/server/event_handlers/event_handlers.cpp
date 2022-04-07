@@ -66,7 +66,7 @@ void HandleStatus(events::Epoller& epoller,
 bool ShouldCloseConnection(const epoll_event& event)
 {
     return (event.events & EPOLLERR) || (event.events & EPOLLHUP) || (event.events & EPOLLRDHUP)
-        || !(event.events & EPOLLIN);
+        || (!(event.events & EPOLLIN));
 }
 
 void HandleClientEvent(
@@ -84,7 +84,7 @@ void HandleClientEvent(
         do {
             size_or_status = it->second.client.Read(buffer);
             if (std::holds_alternative<net::ClientStatus>(size_or_status)) {
-                SPDLOG_INFO("Has got net::ClientStatus"); // {}", static_cast<int>(net::ClientStatus));
+                SPDLOG_INFO("Has got net::ClientStatus");
                 break;
             }
             auto& consumer = it->second;

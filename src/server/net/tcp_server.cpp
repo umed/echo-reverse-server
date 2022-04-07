@@ -26,7 +26,7 @@ TcpServer::TcpServer(uint16_t port, int max_connection_number, bool is_non_block
     : max_connection_number(max_connection_number)
     , connection(std::make_shared<net::Connection>())
 {
-    connection->fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    connection->fd = socket(AF_INET, SOCK_STREAM, 0);
     if (!connection->fd.IsValid()) {
         throw std::runtime_error("Failed to create socket");
     }

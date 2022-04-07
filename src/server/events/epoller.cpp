@@ -86,7 +86,12 @@ void Epoller::Add(int fd_to_add, bool restart, void* data)
         event.data.ptr = data;
     else
         event.data.fd = fd_to_add;
-    int action = restart ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
+    int action;
+    if (restart) {
+        action = EPOLL_CTL_MOD;
+    } else {
+        action = EPOLL_CTL_ADD;
+    }
     utils::SetNonBlocking(fd_to_add);
     int result = epoll_ctl(fd, action, fd_to_add, &event);
     if (result == -1) {
@@ -96,7 +101,6 @@ void Epoller::Add(int fd_to_add, bool restart, void* data)
 
 void Epoller::Remove(int fd_to_remove)
 {
-    utils::SetNonBlocking(fd_to_remove);
     int result = epoll_ctl(fd, EPOLL_CTL_DEL, fd_to_remove, NULL);
     if (result == -1) {
         throw KernelError("Failed to remove file descriptor from subscription list");
