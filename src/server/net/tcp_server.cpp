@@ -9,8 +9,8 @@
 
 namespace echo_reverse_server::net {
 
-utils::FileDescriptorHolder fd;
-sockaddr_in address;
+// utils::FileDescriptorHolder fd;
+// sockaddr_in address;
 
 uint32_t Connection::AddressSize()
 {
@@ -27,7 +27,7 @@ TcpServer::TcpServer(uint16_t port, int max_connection_number, bool is_non_block
     , connection(std::make_shared<net::Connection>())
 {
     connection->fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (!connection->fd.IsValid()) {
+    if (!utils::IsValid(connection->fd)) {
         throw std::runtime_error("Failed to create socket");
     }
 
@@ -67,17 +67,17 @@ void TcpServer::Start()
 std::optional<TcpClient> TcpServer::Accept()
 {
     uint32_t addrlen = connection->AddressSize();
-    utils::FileDescriptorHolder client_socket = accept(connection->fd, connection->Sockaddr(), &addrlen);
-    if (!client_socket.IsValid()) {
+    int client_socket = accept(connection->fd, connection->Sockaddr(), &addrlen);
+    if (client_socket <= 0) {
         if (utils::WouldBlock()) {
             return std::nullopt;
         }
         throw KernelError("Failed to accept new connection");
     }
-    return std::make_optional<TcpClient>(std::move(client_socket));
+    return std::make_optional<TcpClient>(client_socket);
 }
 
-ConnectionPtr TcpServer::Connection()
+const ConnectionPtr TcpServer::Connection() const
 {
     return connection;
 }

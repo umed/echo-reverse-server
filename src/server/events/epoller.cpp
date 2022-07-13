@@ -54,7 +54,7 @@ Epoller::Epoller(int connection_fd, int max_events)
     : fd(epoll_create1(0))
     , max_events(max_events)
 {
-    if (fd == utils::FileDescriptorHolder::INVALID_FILE_DESCRIPTOR) {
+    if (fd == -1) {
         throw KernelError("Failed to create epoll instance");
     }
     if (max_events < 0) {

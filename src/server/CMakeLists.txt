@@ -8,7 +8,7 @@ set(SOURCES
         main.cpp
         event_handlers/event_handlers.cpp
         events/epoller.cpp
-        utils/file_descriptor_holder.cpp
+        utils/fd_helpers.cpp
         net/tcp_server.cpp
 )
 

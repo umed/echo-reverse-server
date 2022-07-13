@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/file_descriptor_holder.hpp"
+#include "utils/fd_helpers.hpp"
 
 #include <sys/epoll.h>
 
@@ -25,8 +25,13 @@ struct Epoller {
 
     void Rearm(int old_fd, void* data = nullptr);
 
+    ~Epoller()
+    {
+        utils::Close(fd);
+    }
+
 private:
-    utils::FileDescriptorHolder fd;
+    int fd;
     int max_events;
 };
 

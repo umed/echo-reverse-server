@@ -1,7 +1,7 @@
 #pragma once
 
 #include "utils/exceptions.hpp"
-#include "utils/file_descriptor_holder.hpp"
+#include "utils/fd_helpers.hpp"
 
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
@@ -17,10 +17,7 @@
 namespace echo_reverse_server::net {
 
 struct ConnectionLost : public std::runtime_error {
-    ConnectionLost(const std::string& error)
-        : std::runtime_error(error)
-    {
-    }
+    using std::runtime_error::runtime_error;
 };
 
 enum class ClientStatus { Reschedule, Close };
@@ -29,9 +26,14 @@ using DataSizeOrClientStatus = std::variant<ssize_t, ClientStatus>;
 
 struct TcpClient {
 
-    TcpClient(utils::FileDescriptorHolder&& fd)
-        : fd(std::move(fd))
+    TcpClient(int fd)
+        : fd(fd)
     {
+    }
+
+    ~TcpClient()
+    {
+        utils::Close(fd);
     }
 
     template <size_t buffer_size>
@@ -64,7 +66,7 @@ struct TcpClient {
         }
     }
 
-    utils::FileDescriptorHolder fd;
+    int fd;
 };
 
 } // namespace echo_reverse_server::net

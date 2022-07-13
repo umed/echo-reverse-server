@@ -13,11 +13,16 @@ constexpr uint16_t PORT = 9000;
 constexpr int MAX_CONNECTION_NUMBER = 1024;
 
 struct Connection {
-    utils::FileDescriptorHolder fd;
+    int fd;
     sockaddr_in address;
 
     uint32_t AddressSize();
     sockaddr* Sockaddr();
+
+    ~Connection()
+    {
+        utils::Close(fd);
+    }
 };
 
 using ConnectionPtr = std::shared_ptr<Connection>;
@@ -29,7 +34,7 @@ public:
 
     std::optional<TcpClient> Accept();
 
-    ConnectionPtr Connection();
+    const ConnectionPtr Connection() const;
 
 private:
     int max_connection_number;
