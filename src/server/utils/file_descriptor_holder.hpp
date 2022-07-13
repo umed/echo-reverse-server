@@ -26,6 +26,8 @@ struct FileDescriptorHolder {
 
     operator int() const;
 
+    int ToInt() const;
+
 private:
     int fd;
 };

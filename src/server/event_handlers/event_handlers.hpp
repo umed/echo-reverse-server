@@ -32,22 +32,12 @@ struct Consumer {
 
 using FdConsumerMap = std::map<int, Consumer>;
 
-struct SynchrnoziedConsumers {
-    std::shared_mutex mutex;
-    FdConsumerMap data;
-};
-
 bool ShouldCloseConnection(const epoll_event& event);
 
-void HandleClientEvent(
-    events::Epoller& epoller, net::TcpServer& server, SynchrnoziedConsumers& consumers, const epoll_event& event);
+void HandleClientEvent(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event);
 
-void HandleDisconnect(events::Epoller& epoller,
-    net::TcpServer& server,
-    SynchrnoziedConsumers& consumers,
-    const epoll_event& event) noexcept;
+void HandleDisconnect(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event) noexcept;
 
-void HandleConnect(
-    events::Epoller& epoller, net::TcpServer& server, SynchrnoziedConsumers& consumers, const epoll_event& event);
+void HandleConnect(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event);
 
 } // namespace echo_reverse_server::event_handlers

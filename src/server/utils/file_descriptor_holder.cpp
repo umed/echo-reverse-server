@@ -76,5 +76,9 @@ FileDescriptorHolder::operator int() const
 {
     return fd;
 }
+int FileDescriptorHolder::ToInt() const
+{
+    return fd;
+}
 
 } // namespace echo_reverse_server::utils

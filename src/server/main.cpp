@@ -76,23 +76,22 @@ int main(int argc, char** argv)
     SPDLOG_INFO("Setting up epoll events, max events number {}", params.max_event_number);
     events::Epoller epoller(server.Connection()->fd, params.max_event_number);
 
-    event_handlers::SynchrnoziedConsumers consumers;
-    auto waiter = [&epoller, &server, &consumers](const epoll_event& event) {
+    auto waiter = [&epoller, &server](const epoll_event& event) {
         try {
-            SPDLOG_INFO("Event received for fd: {}, event: {:x}", event.data.fd, event.events);
+            SPDLOG_INFO("Event received");
             if (event_handlers::ShouldCloseConnection(event)) {
-                event_handlers::HandleDisconnect(epoller, server, consumers, event);
+                event_handlers::HandleDisconnect(epoller, server, event);
             } else if (event.data.fd == server.Connection()->fd) {
-                event_handlers::HandleConnect(epoller, server, consumers, event);
+                event_handlers::HandleConnect(epoller, server, event);
             } else {
-                event_handlers::HandleClientEvent(epoller, server, consumers, event);
+                event_handlers::HandleClientEvent(epoller, server, event);
             }
         } catch (const KernelError& e) {
             SPDLOG_ERROR(e.what());
         } catch (const net::ConnectionLost& e) {
             SPDLOG_WARN("{}. Consumer will be dropped", e.what());
             if (event.data.fd != server.Connection()->fd) {
-                HandleDisconnect(epoller, server, consumers, event);
+                event_handlers::HandleDisconnect(epoller, server, event);
             }
         } catch (const std::exception& e) {
             SPDLOG_ERROR(e.what());

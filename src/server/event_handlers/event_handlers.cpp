@@ -14,11 +14,11 @@ namespace {
 
 using BufferArray = std::array<uint8_t, 1024>;
 
-void CloseConnection(events::Epoller& epoller, SynchrnoziedConsumers& consumers, FdConsumerMap::iterator it)
+void CloseConsumer(events::Epoller& epoller, Consumer* consumer)
 {
-    SPDLOG_INFO("Closing connection for fd: {}", it->first);
-    epoller.Remove(it->first);
-    consumers.data.erase(it);
+    SPDLOG_INFO("Closing connection for fd: {}", consumer->client.fd);
+    epoller.Remove(consumer->client.fd);
+    delete consumer;
 }
 
 void ReverseEcho(const net::TcpClient& client, const std::vector<uint8_t>& unsent_data)
@@ -41,20 +41,17 @@ void ReverseEcho(const net::TcpClient& client, const std::vector<uint8_t>& unsen
     client.Write(reversed_buffer, j);
 }
 
-void HandleStatus(events::Epoller& epoller,
-    SynchrnoziedConsumers& consumers,
-    FdConsumerMap::iterator it,
-    const net::ClientStatus status)
+void HandleStatus(events::Epoller& epoller, Consumer* consumer, const net::ClientStatus status)
 {
     SPDLOG_INFO("Handling net::ClientStatus");
     switch (status) {
     case net::ClientStatus::Close:
         SPDLOG_INFO("ClientStatus::Close");
-        CloseConnection(epoller, consumers, std::move(it));
+        CloseConsumer(epoller, consumer);
         break;
     case net::ClientStatus::Reschedule:
         SPDLOG_INFO("ClientStatus::Reschedule");
-        epoller.Rearm(it->first);
+        epoller.Rearm(consumer->client.fd, static_cast<void*>(consumer));
         break;
     default:
         SPDLOG_ERROR("Unexpected Read's status");
@@ -69,70 +66,52 @@ bool ShouldCloseConnection(const epoll_event& event)
         || (!(event.events & EPOLLIN));
 }
 
-void HandleClientEvent(
-    events::Epoller& epoller, net::TcpServer&, SynchrnoziedConsumers& consumers, const epoll_event& event)
+void HandleClientEvent(events::Epoller& epoller, net::TcpServer&, const epoll_event& event)
 {
     SPDLOG_INFO("Handling client event");
     net::DataSizeOrClientStatus size_or_status;
-    {
-        std::shared_lock lock(consumers.mutex);
-        auto it = consumers.data.find(event.data.fd);
-        if (it == consumers.data.end()) {
-            throw std::runtime_error("Failed to handle event, unexpected file descriptor");
-        }
-        BufferArray buffer;
-        do {
-            size_or_status = it->second.client.Read(buffer);
-            if (std::holds_alternative<net::ClientStatus>(size_or_status)) {
-                SPDLOG_INFO("Has got net::ClientStatus");
-                break;
-            }
-            auto& consumer = it->second;
-            auto bytes_read = std::get<ssize_t>(size_or_status);
-            int first_index = 0;
-            auto& unsent_data = consumer.unsent_data;
-            for (int i = 0; i < bytes_read; ++i) {
-                if (buffer[i] == 0) {
-                    ReverseEcho(consumer.client, unsent_data);
-                    unsent_data.clear();
-                    continue;
-                }
-                unsent_data.push_back(buffer[i]);
-            }
-        } while (true);
-        SPDLOG_INFO("Stopped reading/sending data");
+    auto consumer = static_cast<Consumer*>(event.data.ptr);
+    if (consumer == nullptr) {
+        throw std::runtime_error("Failed to handle event, unexpected file descriptor");
     }
-    {
-        std::unique_lock lock(consumers.mutex);
-        auto it = consumers.data.find(event.data.fd);
-        if (it == consumers.data.end()) {
-            throw std::runtime_error("Failed to handle event, unexpected file descriptor");
+    BufferArray buffer;
+    do {
+        size_or_status = consumer->client.Read(buffer);
+        if (std::holds_alternative<net::ClientStatus>(size_or_status)) {
+            SPDLOG_INFO("Has got net::ClientStatus");
+            break;
         }
-        auto status = std::get<net::ClientStatus>(size_or_status);
-        HandleStatus(epoller, consumers, std::move(it), status);
-    }
+        auto bytes_read = std::get<ssize_t>(size_or_status);
+        int first_index = 0;
+        auto& unsent_data = consumer->unsent_data;
+        for (int i = 0; i < bytes_read; ++i) {
+            if (buffer[i] == 0) {
+                ReverseEcho(consumer->client, unsent_data);
+                unsent_data.clear();
+                continue;
+            }
+            unsent_data.push_back(buffer[i]);
+        }
+    } while (true);
+    SPDLOG_INFO("Stopped reading/sending data");
+    auto status = std::get<net::ClientStatus>(size_or_status);
+    HandleStatus(epoller, consumer, status);
 }
 
-void HandleDisconnect(events::Epoller& epoller,
-    net::TcpServer& server,
-    SynchrnoziedConsumers& consumers,
-    const epoll_event& event) noexcept
+void HandleDisconnect(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event) noexcept
 {
-    SPDLOG_INFO("Disconnecting fd: {}", event.data.fd);
-    {
-        std::unique_lock lock(consumers.mutex);
-        auto it = consumers.data.find(event.data.fd);
-        if (it != consumers.data.end()) {
-            CloseConnection(epoller, consumers, std::move(it));
-        } else {
-            SPDLOG_WARN("Going to close connection that is not presented in list of consumers");
-        }
+    auto consumer = static_cast<Consumer*>(event.data.ptr);
+    if (consumer == nullptr) {
+        SPDLOG_ERROR("Unexpected disconnect event with empty data");
+        return;
     }
-    SPDLOG_INFO("Closed connection for fd {}", event.data.fd);
+    int fd = consumer->client.fd;
+    SPDLOG_INFO("Disconnecting fd: {}", fd);
+    CloseConsumer(epoller, consumer);
+    SPDLOG_INFO("Closed connection for fd {}", fd);
 }
 
-void HandleConnect(
-    events::Epoller& epoller, net::TcpServer& server, SynchrnoziedConsumers& consumers, const epoll_event& event)
+void HandleConnect(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event)
 {
     SPDLOG_INFO("Accepting new connection");
     auto client = server.Accept();
@@ -141,11 +120,8 @@ void HandleConnect(
         return;
     }
     int fd = client->fd;
-    {
-        std::unique_lock lock(consumers.mutex);
-        consumers.data.emplace(fd, Consumer { std::move(client.value()), {} });
-    }
-    epoller.Add(fd);
+    auto consumer = new Consumer { std::move(client.value()), {} };
+    epoller.Add(fd, false, static_cast<void*>(consumer));
     SPDLOG_INFO("Connection accepted, fd {} has been assigned", fd);
 }
 
