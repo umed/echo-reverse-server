@@ -49,9 +49,9 @@ int main()
         return EXIT_FAILURE;
     }
 
-    send(server_fd, BIG_ARRAY, sizeof(BIG_ARRAY), 0);
-    LOG_INFO() << "BIG_ARRAY message sent";
-    ReadResponse(server_fd);
+    // send(server_fd, BIG_ARRAY, sizeof(BIG_ARRAY), 0);
+    // LOG_INFO() << "BIG_ARRAY message sent";
+    // ReadResponse(server_fd);
 
     send(server_fd, SMALL_ARRAY, sizeof(SMALL_ARRAY), 0);
     LOG_INFO() << "SMALL_ARRAY message sent";

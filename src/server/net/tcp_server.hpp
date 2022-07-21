@@ -12,33 +12,15 @@ namespace echo_reverse_server::net {
 constexpr uint16_t PORT = 9000;
 constexpr int MAX_CONNECTION_NUMBER = 1024;
 
-struct Connection {
-    int fd;
-    sockaddr_in address;
-
-    uint32_t AddressSize();
-    sockaddr* Sockaddr();
-
-    ~Connection()
-    {
-        utils::Close(fd);
-    }
-};
-
-using ConnectionPtr = std::shared_ptr<Connection>;
-
-class TcpServer {
+class TcpServer : public TcpSocket {
 public:
-    TcpServer(uint16_t port, int max_connection_number, bool is_non_blocking = true);
-    void Start();
+    TcpServer(uint16_t port, int max_connection_number);
 
-    std::optional<TcpClient> Accept();
-
-    const ConnectionPtr Connection() const;
+    void Start() const;
+    TcpClient* Accept() const;
 
 private:
     int max_connection_number;
-    ConnectionPtr connection;
 };
 
 } // namespace echo_reverse_server::net

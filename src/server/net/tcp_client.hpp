@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tcp_socket.hpp"
 #include "utils/exceptions.hpp"
 #include "utils/fd_helpers.hpp"
 
@@ -22,29 +23,25 @@ struct ConnectionLost : public std::runtime_error {
 
 enum class ClientStatus { Reschedule, Close };
 
-using DataSizeOrClientStatus = std::variant<ssize_t, ClientStatus>;
+using TcpReadStatus = std::variant<ssize_t, ClientStatus>;
 
-struct TcpClient {
+struct TcpClient : public TcpSocket {
 
     TcpClient(int fd)
-        : fd(fd)
+        : TcpSocket(fd)
     {
-    }
-
-    ~TcpClient()
-    {
-        utils::Close(fd);
     }
 
     template <size_t buffer_size>
-    DataSizeOrClientStatus Read(std::array<uint8_t, buffer_size>& buffer) const
+    TcpReadStatus Read(std::array<uint8_t, buffer_size>& buffer) const
     {
         ssize_t bytes_read = recv(fd, buffer.data(), buffer.size(), 0);
         if (bytes_read < 0) {
             if (utils::WouldBlock()) {
+                SPDLOG_INFO("Read reschedule");
                 return ClientStatus::Reschedule;
             }
-            throw KernelError("Failed to read bytes");
+            throw KernelError(fmt::format("Failed to read from {} fd", fd));
         } else if (bytes_read == 0) {
             return ClientStatus::Close;
         }
@@ -65,8 +62,6 @@ struct TcpClient {
             }
         }
     }
-
-    int fd;
 };
 
 } // namespace echo_reverse_server::net

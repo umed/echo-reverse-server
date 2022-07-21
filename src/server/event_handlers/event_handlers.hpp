@@ -34,10 +34,10 @@ using FdConsumerMap = std::map<int, Consumer>;
 
 bool ShouldCloseConnection(const epoll_event& event);
 
-void HandleClientEvent(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event);
+void HandleClientEvent(events::Epoller& epoller, epoll_event& event);
 
-void HandleDisconnect(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event) noexcept;
+void HandleDisconnect(events::Epoller& epoller, epoll_event& event);
 
-void HandleConnect(events::Epoller& epoller, net::TcpServer& server, const epoll_event& event);
+void HandleConnect(events::Epoller& epoller, epoll_event& event);
 
 } // namespace echo_reverse_server::event_handlers

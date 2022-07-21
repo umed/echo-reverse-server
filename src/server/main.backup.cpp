@@ -68,7 +68,7 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     SetupSpdlog();
-    auto tcp_server = new net::TcpServer(params.port, params.max_connection_number);
+    net::TcpServer server(params.port, params.max_connection_number);
     SPDLOG_INFO("Starting server on port: {}", params.port);
     SPDLOG_INFO("Maximum of simultaneous connections is set to {}", params.max_connection_number);
     server.Start();
@@ -76,16 +76,17 @@ int main(int argc, char** argv)
     SPDLOG_INFO("Setting up epoll events, max events number {}", params.max_event_number);
     events::Epoller epoller(server.Connection()->fd, params.max_event_number);
 
-    auto waiter = [](epoll_event& event) -> bool {
+    auto waiter = [&epoller, &server](const epoll_event& event) {
         try {
             SPDLOG_INFO("Event received");
             if (event_handlers::ShouldCloseConnection(event)) {
-                event_handlers::HandleDisconnect(event);
-                return false;
-            } else if (static_cast<net::TcpSocket*>(event.data.ptr)->GetFd()) {
-                event_handlers::HandleConnect(epoller, event);
+                SPDLOG_INFO("Handle disconnect");
+                event_handlers::HandleDisconnect(epoller, server, event);
+            } else if (static_cast<event_handlers::Consumer*>(event.data.ptr)->client.fd == server.Connection()->fd) {
+                SPDLOG_INFO("Handle connect");
+                event_handlers::HandleConnect(epoller, server, event);
             } else {
-                event_handlers::HandleClientEvent(epoller, event);
+                event_handlers::HandleClientEvent(epoller, server, event);
             }
         } catch (const KernelError& e) {
             SPDLOG_ERROR(e.what());
@@ -103,7 +104,7 @@ int main(int argc, char** argv)
     SPDLOG_INFO("Number of available threads: {}, will be used: {}", num_threads_available, params.thread_number);
 
     std::vector<std::thread> threads;
-    for (int i = 0; i < 1 /* params.thread_number*/; ++i) {
+    for (int i = 0; i < params.thread_number; ++i) {
         threads.emplace_back([&] {
             epoller.Wait(waiter);
         });

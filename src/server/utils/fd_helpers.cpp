@@ -12,8 +12,10 @@ namespace echo_reverse_server::utils {
 
 bool WouldBlock()
 {
-    SPDLOG_INFO("Would block: {}", std::strerror(errno));
-    return errno == EAGAIN || errno == EWOULDBLOCK;
+    bool again = errno == EAGAIN;
+    bool block = errno == EWOULDBLOCK;
+    SPDLOG_INFO("Would block: {}, {}, {}", std::strerror(errno), again, block);
+    return again || block;
 }
 
 void SetNonBlocking(int fd)
