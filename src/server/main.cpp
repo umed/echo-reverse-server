@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     SPDLOG_INFO("Number of available threads: {}, will be used: {}", num_threads_available, params.thread_number);
 
     std::vector<std::thread> threads;
-    for (int i = 0; i < 1 /* params.thread_number*/; ++i) {
+    for (int i = 0; i < params.thread_number; ++i) {
         threads.emplace_back([&] {
             epoller.Wait(waiter);
         });
