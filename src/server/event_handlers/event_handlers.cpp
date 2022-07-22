@@ -106,7 +106,6 @@ bool ClientEventHandler::HandleImpl(const events::Epoller& epoller)
     if (!client) {
         throw std::runtime_error("Failed to handle event, unexpected socket");
     };
-    net::TcpReadStatus read_status;
     return event_handlers::HandleReadEvent(client, unsent_data) == net::ClientStatus::Reschedule;
 }
 
