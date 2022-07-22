@@ -36,20 +36,18 @@ void TcpServer::Start() const
     }
 }
 
-TcpClient* TcpServer::Accept() const
+std::unique_ptr<TcpSocket> TcpServer::Accept() const
 {
     SPDLOG_INFO("Accepting connection");
-    sockaddr in_addr;
-    socklen_t addrlen = sizeof(in_addr);
-    int client_socket = accept(fd, &in_addr, &addrlen);
-    if (client_socket <= 0) {
+    int client_socket = accept4(fd, nullptr, nullptr, SOCK_NONBLOCK);
+    if (client_socket < 0) {
         if (utils::WouldBlock()) {
             return nullptr;
         }
         SPDLOG_ERROR("Failed to accept new connection: {}", std::strerror(errno));
         return nullptr;
     }
-    return new TcpClient(client_socket);
+    return std::make_unique<TcpClient>(client_socket);
 }
 
 } // namespace echo_reverse_server::net

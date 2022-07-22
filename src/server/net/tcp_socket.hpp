@@ -2,6 +2,8 @@
 
 #include "utils/fd_helpers.hpp"
 
+#include <stdexcept>
+
 namespace echo_reverse_server::net {
 
 struct TcpSocket {

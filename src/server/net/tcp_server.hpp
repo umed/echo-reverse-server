@@ -17,7 +17,7 @@ public:
     TcpServer(uint16_t port, int max_connection_number);
 
     void Start() const;
-    TcpClient* Accept() const;
+    std::unique_ptr<TcpSocket> Accept() const;
 
 private:
     int max_connection_number;

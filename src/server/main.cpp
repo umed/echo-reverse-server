@@ -5,14 +5,14 @@
 #endif
 
 #include "event_handlers/event_handlers.hpp"
-#include "events/epoller.hpp"
 #include "net/tcp_server.hpp"
 
 #include <CLI/App.hpp>
 #include <CLI/Config.hpp>
 #include <CLI/Formatter.hpp>
+#include <spdlog/spdlog.h>
 
-#include "spdlog/spdlog.h"
+#include <sys/epoll.h>
 
 #include <thread>
 
@@ -58,6 +58,8 @@ void SetupSpdlog()
     spdlog::set_pattern("[%D %T%z] [%^%l%$] [t %t] %v");
 }
 
+
+
 int main(int argc, char** argv)
 {
     CliParams params;
@@ -68,32 +70,24 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     SetupSpdlog();
-    auto tcp_server = new net::TcpServer(params.port, params.max_connection_number);
+    auto server = std::make_unique<net::TcpServer>(params.port, params.max_connection_number);
+
     SPDLOG_INFO("Starting server on port: {}", params.port);
     SPDLOG_INFO("Maximum of simultaneous connections is set to {}", params.max_connection_number);
-    server.Start();
-
+    server->Start();
+    auto server_event_handler = std::make_unique<event_handlers::ServerEventHandler>(std::move(server));
     SPDLOG_INFO("Setting up epoll events, max events number {}", params.max_event_number);
-    events::Epoller epoller(server.Connection()->fd, params.max_event_number);
+    events::Epoller epoller(server_event_handler.get(), params.max_event_number);
+    server_event_handler.release();
 
-    auto waiter = [](epoll_event& event) -> bool {
+    auto waiter = [](const events::Epoller& epoller,const epoll_event& event) {
         try {
-            SPDLOG_INFO("Event received");
-            if (event_handlers::ShouldCloseConnection(event)) {
-                event_handlers::HandleDisconnect(event);
-                return false;
-            } else if (static_cast<net::TcpSocket*>(event.data.ptr)->GetFd()) {
-                event_handlers::HandleConnect(epoller, event);
-            } else {
-                event_handlers::HandleClientEvent(epoller, event);
-            }
+            SPDLOG_INFO("Handling event...");
+            auto event_handler = static_cast<event_handlers::TcpSocketEventHandler*>(event.data.ptr);
+            event_handler->Handle(epoller, event);
         } catch (const KernelError& e) {
             SPDLOG_ERROR(e.what());
-        } catch (const net::ConnectionLost& e) {
-            SPDLOG_WARN("{}. Consumer will be dropped", e.what());
-            if (event.data.fd != server.Connection()->fd) {
-                event_handlers::HandleDisconnect(epoller, server, event);
-            }
+            exit(1);
         } catch (const std::exception& e) {
             SPDLOG_ERROR(e.what());
         }

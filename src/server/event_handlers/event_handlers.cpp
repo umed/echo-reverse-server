@@ -6,6 +6,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <sys/epoll.h>
+
 #include <vector>
 
 namespace echo_reverse_server::event_handlers {
@@ -20,7 +22,7 @@ void RemoveTcpSocket(net::TcpSocket* tcp_socket)
     delete tcp_socket;
 }
 
-void ReverseEcho(const net::TcpClient& client, const std::vector<uint8_t>& unsent_data)
+void ReverseEcho(const net::TcpClient* client, const std::vector<uint8_t>& unsent_data)
 {
     BufferArray reversed_buffer;
     size_t j = 0;
@@ -29,43 +31,18 @@ void ReverseEcho(const net::TcpClient& client, const std::vector<uint8_t>& unsen
             reversed_buffer[j] = unsent_data[i];
         }
         if (j == reversed_buffer.size()) {
-            client.Write(reversed_buffer, j);
+            client->Write(reversed_buffer, j);
         }
     }
     if (j % reversed_buffer.size() != 0) {
         reversed_buffer[j] = 0;
         ++j;
     }
-    client.Write(reversed_buffer, j);
+    client->Write(reversed_buffer, j);
 }
 
-void HandleStatus(events::Epoller& epoller, epoll_event& event, const net::ClientStatus status)
-{
-    auto client = static_cast<net::TcpSocket*>(event.data.ptr);
-    SPDLOG_INFO("Handling net::ClientStatus");
-    switch (status) {
-    case net::ClientStatus::Close:
-        SPDLOG_INFO("ClientStatus::Close");
-        RemoveTcpSocket(client);
-        break;
-    case net::ClientStatus::Reschedule:
-        SPDLOG_INFO("ClientStatus::Reschedule");
-        epoller.Rearm(client->GetFd(), event.data.ptr);
-        break;
-    default:
-        SPDLOG_ERROR("Unexpected Read's status");
-    }
-}
 
-} // namespace
-
-bool ShouldCloseConnection(const epoll_event& event)
-{
-    return (event.events & EPOLLERR) || (event.events & EPOLLHUP) // || (event.events & EPOLLRDHUP)
-        || (!(event.events & EPOLLIN));
-}
-
-net::ClientStatus HandleReadEvent(epoll_event& event)
+net::ClientStatus HandleReadEvent(net::TcpClient* client, std::vector<uint8_t>& unsent_data)
 {
     BufferArray buffer;
     net::TcpReadStatus read_status;
@@ -77,56 +54,75 @@ net::ClientStatus HandleReadEvent(epoll_event& event)
         }
         auto bytes_read = std::get<ssize_t>(read_status);
         int first_index = 0;
-        auto& unsent_data = consumer->unsent_data;
+        SPDLOG_INFO("Read '{}' bytes from client", bytes_read);
         for (int i = 0; i < bytes_read; ++i) {
             if (buffer[i] == 0) {
-                ReverseEcho(consumer->client, unsent_data);
+                ReverseEcho(client, unsent_data);
                 unsent_data.clear();
                 continue;
             }
             unsent_data.push_back(buffer[i]);
         }
     } while (true);
-    return read_status;
+    return std::get<net::ClientStatus>(read_status);
 }
 
-void HandleClientEvent(events::Epoller& epoller, epoll_event& event)
+bool ShouldCloseConnection(const uint32_t& events)
 {
-    SPDLOG_INFO("Handling client event");
-    net::TcpReadStatus read_status;
-    if (event.data.ptr == nullptr) {
-        throw std::runtime_error("Failed to handle event, unexpected file descriptor");
-    };
-    SPDLOG_INFO("Stopped reading/sending data");
-    auto status = HandleReadEvent(event);
-    return HandleStatus(epoller, event, status);
+    return (events & EPOLLERR) || (events & EPOLLHUP) // || (event.events & EPOLLRDHUP)
+        || (!(events & EPOLLIN));
 }
 
-bool HandleDisconnect(epoll_event& event)
+} // namespace
+
+
+TcpSocketEventHandler::TcpSocketEventHandler(std::unique_ptr<net::TcpSocket> socket)
+    : socket(std::move(socket))
 {
-    auto client = static_cast<net::TcpClient*>(event.data.ptr);
-    if (client == nullptr) {
-        SPDLOG_ERROR("Unexpected disconnect event with empty socket");
-        return;
+}
+
+void TcpSocketEventHandler::Handle(const events::Epoller& epoller, const epoll_event& event) {
+    SPDLOG_INFO("Handling event for fd: '{}'", this->GetFd());
+    if (ShouldCloseConnection(event.events)) {
+        SPDLOG_INFO("Closing connection for fd: {}", socket->GetFd());
+        delete this;
+    } else if (HandleImpl(epoller)) {
+        SPDLOG_INFO("Rearming connection for fd: {}", socket->GetFd());
+        epoller.Rearm(this);
+    } else {
+        SPDLOG_INFO("Closing connection for fd: {}", socket->GetFd());
+        delete this;
     }
-    int fd = client->GetFd();
-    SPDLOG_INFO("Disconnecting fd: {}", fd);
-    RemoveTcpSocket(client);
-    SPDLOG_INFO("Closed connection for fd {}", fd);
-    return false;
 }
 
-bool HandleConnect(epoll_event& event)
+int TcpSocketEventHandler::GetFd()
+{
+    return socket->GetFd();
+}
+
+bool ClientEventHandler::HandleImpl(const events::Epoller& epoller)
+{
+    SPDLOG_INFO("Handling client event: {}", this->GetFd());
+    auto client = static_cast<net::TcpClient*>(socket.get());
+    if (!client) {
+        throw std::runtime_error("Failed to handle event, unexpected socket");
+    };
+    net::TcpReadStatus read_status;
+    return event_handlers::HandleReadEvent(client, unsent_data) == net::ClientStatus::Reschedule;
+}
+
+bool ServerEventHandler::HandleImpl(const events::Epoller& epoller)
 {
     SPDLOG_INFO("Accepting new connections");
-    auto server = static_cast<net::TcpServer*>(event.data.ptr);
+    auto server = static_cast<net::TcpServer*>(socket.get());
     while (true) {
         auto client = server->Accept();
-        if (client == nullptr) {
+        if (!client) {
             SPDLOG_INFO("No more consumers available, continue waiting");
             break;
         }
         SPDLOG_INFO("Connection accepted, fd {} has been assigned", client->GetFd());
+        epoller.Add(new ClientEventHandler(std::move(client)));
     }
     return true;
 }

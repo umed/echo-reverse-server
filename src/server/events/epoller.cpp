@@ -1,10 +1,12 @@
 #include "epoller.hpp"
 
-#include "event_handlers/event_handlers.hpp"
-#include "tcp_socket.hpp"
+#include "net/tcp_socket.hpp"
 #include "utils/exceptions.hpp"
+#include "utils/fd_helpers.hpp"
 
 #include <spdlog/spdlog.h>
+
+#include <sys/epoll.h>
 
 #include <vector>
 
@@ -16,15 +18,8 @@ using EpollEvents = std::vector<epoll_event>;
 
 constexpr int BLOCK_WAIT_INDEFINITLY = -1;
 
-void HandleEvents(Epoller* epoller, const EpollEvents& events, int size, const Epoller::EventHandler& event_consumer)
+void HandleEvents(Epoller& epoller, const EpollEvents& events, int size, const Epoller::EventHandler& event_handler)
 {
-    for (int i = 0; i < size; ++i) {
-        auto& event = events[i];
-        if (event_consumer(event)) {
-            net::TcpSocket* socket = static_cast<net::TcpSocket*>(event.data.ptr);
-            epoller->Rearm(socket->GetFd(), event.data.ptr);
-        }
-    }
 }
 
 int RunWaitLoop(int epoll_fd, EpollEvents& events, bool untill_event = true)
@@ -39,14 +34,10 @@ int RunWaitLoop(int epoll_fd, EpollEvents& events, bool untill_event = true)
     return events_number;
 }
 
+
 } // namespace
 
-bool ShouldWaitForNewEvents()
-{
-    return errno == EAGAIN || errno == EWOULDBLOCK;
-}
-
-Epoller::Epoller(int listen_socket_fd, int max_events)
+Epoller::Epoller(EventWrapper* event_wrapper, int max_events)
     : epoll_fd(epoll_create1(0))
     , max_events(max_events)
 {
@@ -58,53 +49,61 @@ Epoller::Epoller(int listen_socket_fd, int max_events)
     }
 
     epoll_event event;
-    event.data.ptr = new event_handlers::Consumer { { listen_socket_fd }, {} };
-    event.events = EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLPRI | EPOLLERR;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_socket_fd, &event) == -1) {
-        throw KernelError("Failed to initialize accept");
+    event.data.ptr = static_cast<void*>(event_wrapper);
+    // EPOLLONESHOT, indicates that we will have to read and wait for available data
+    // until EAGAIN or EWOULDBLOCK is returned
+    event.events = EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLET | EPOLLONESHOT;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event_wrapper->GetFd(), &event) == -1) {
+        throw KernelError("Failed to subscribe during epoller initialization");
     }
 }
 
-void Epoller::Wait(const EventHandler& event_consumer)
+Epoller::~Epoller()
+{
+    utils::Close(epoll_fd);
+}
+
+void Epoller::Wait(const EventHandler& event_handler) const
 {
     EpollEvents events(max_events);
     for (;;) {
         try {
             int events_received = RunWaitLoop(epoll_fd, events);
-            HandleEvents(this, events, events_received, event_consumer);
+            for (int i = 0; i < events_received; ++i) {
+                auto& event = events[i];
+                event_handler(*this, event);
+            }
         } catch (const KernelError& e) {
             SPDLOG_ERROR(e.what());
         }
     }
 }
 
-void Epoller::Add(int fd_to_add, void* data)
+void Epoller::Add(EventWrapper* event_wrapper) const
 {
     struct epoll_event event;
-    event.events = EPOLLIN | EPOLLET;
-    event.data.ptr = data;
-    utils::SetNonBlocking(fd_to_add);
-    int result = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd_to_add, &event);
+    event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+    event.data.ptr = static_cast<void*>(event_wrapper);
+    int result = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event_wrapper->GetFd(), &event);
     if (result == -1) {
         throw KernelError("Failed to add file descriptor to subscription list");
     }
 }
 
-void Epoller::Remove(int fd_to_remove)
+void Epoller::Remove(EventWrapper* event_wrapper) const
 {
-    int result = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd_to_remove, NULL);
+    int result = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_wrapper->GetFd(), NULL);
     if (result == -1) {
         throw KernelError("Failed to remove file descriptor from subscription list");
     }
 }
 
-void Epoller::Rearm(int old_fd, void* data)
+void Epoller::Rearm(EventWrapper* event_wrapper) const
 {
     struct epoll_event event;
-    event.events = EPOLLIN | EPOLLET;
-    event.data.ptr = data;
-    utils::SetNonBlocking(old_fd);
-    int result = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, old_fd, &event);
+    event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+    event.data.ptr = static_cast<void*>(event_wrapper);
+    int result = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_wrapper->GetFd(), &event);
     if (result == -1) {
         throw KernelError("Failed to add file descriptor to subscription list");
     }
