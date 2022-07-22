@@ -20,7 +20,11 @@ constexpr int PORT = 9000;
 void ReadResponse(int server_fd)
 {
     uint8_t buffer[1024];
-    size_t bytes_read;
+    ssize_t bytes_read;
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
     while ((bytes_read = read(server_fd, buffer, sizeof(buffer))) > 0) {
         LOG_INFO() << "read";
         LOG_INFO() << fmt::format("{}", std::vector<uint8_t>(buffer, buffer + bytes_read));
@@ -56,7 +60,7 @@ int main()
     send(server_fd, SMALL_ARRAY, sizeof(SMALL_ARRAY), 0);
     LOG_INFO() << "SMALL_ARRAY message sent";
     ReadResponse(server_fd);
-
+    shutdown(server_fd, SHUT_RDWR);
     close(server_fd);
     return EXIT_SUCCESS;
 }

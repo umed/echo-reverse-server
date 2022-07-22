@@ -9,77 +9,45 @@
 
 namespace echo_reverse_server::net {
 
-// utils::FileDescriptorHolder fd;
-// sockaddr_in address;
-
-uint32_t Connection::AddressSize()
+TcpServer::TcpServer(uint16_t port, int max_connection_number)
+    : TcpSocket(socket(AF_INET, SOCK_STREAM, 0))
+    , max_connection_number(max_connection_number)
 {
-    return sizeof(address);
-}
-
-sockaddr* Connection::Sockaddr()
-{
-    return reinterpret_cast<sockaddr*>(&address);
-}
-
-TcpServer::TcpServer(uint16_t port, int max_connection_number, bool is_non_blocking)
-    : max_connection_number(max_connection_number)
-    , connection(std::make_shared<net::Connection>())
-{
-    connection->fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (!utils::IsValid(connection->fd)) {
-        throw std::runtime_error("Failed to create socket");
+    int opt = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        throw std::runtime_error("Failed to set socket options");
     }
 
-    auto& address = connection->address;
+    sockaddr_in address;
+    memset(static_cast<void*>(&address), 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
-    int opt = 1;
-    if (setsockopt(connection->fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-        throw std::runtime_error("Failed to set socket options");
-    }
-
-    if (bind(connection->fd, connection->Sockaddr(), connection->AddressSize()) < 0) {
+    if (bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0) {
         throw std::runtime_error("Failed to bind socket to address");
-    }
-
-    if (is_non_blocking) {
-        utils::SetNonBlocking(connection->fd);
     }
 }
 
-// TcpServer(std::string_view ip, uint32_t port, int max_connection_number)
-// {
-//     address.sin_family = AF_INET;
-//     address.sin_addr.s_addr = INADDR_ANY;
-//     address.sin_port = htons(PORT);
-// }
-
-void TcpServer::Start()
+void TcpServer::Start() const
 {
-    if (listen(connection->fd, max_connection_number) < 0) {
+    if (listen(fd, max_connection_number) < 0) {
         throw std::runtime_error("Failed to listen for connections");
     }
 }
 
-std::optional<TcpClient> TcpServer::Accept()
+std::unique_ptr<TcpSocket> TcpServer::Accept() const
 {
-    uint32_t addrlen = connection->AddressSize();
-    int client_socket = accept(connection->fd, connection->Sockaddr(), &addrlen);
-    if (client_socket <= 0) {
+    SPDLOG_INFO("Accepting connection");
+    int client_socket = accept4(fd, nullptr, nullptr, SOCK_NONBLOCK);
+    if (client_socket < 0) {
         if (utils::WouldBlock()) {
-            return std::nullopt;
+            return nullptr;
         }
-        throw KernelError("Failed to accept new connection");
+        SPDLOG_ERROR("Failed to accept new connection: {}", std::strerror(errno));
+        return nullptr;
     }
-    return std::make_optional<TcpClient>(client_socket);
-}
-
-const ConnectionPtr TcpServer::Connection() const
-{
-    return connection;
+    return std::make_unique<TcpClient>(client_socket);
 }
 
 } // namespace echo_reverse_server::net

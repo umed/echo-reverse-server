@@ -1,37 +1,33 @@
 #pragma once
 
-#include "utils/fd_helpers.hpp"
-
-#include <sys/epoll.h>
-
 #include <functional>
+
+struct epoll_event;
 
 namespace echo_reverse_server::events {
 
 constexpr auto MAX_EVENT_NUMBER = 64;
 
-bool ShouldWaitForNewEvents();
+struct EventWrapper {
+    virtual ~EventWrapper() = default;
+
+    virtual int GetFd() = 0;
+};
 
 struct Epoller {
-    using EventHandler = std::function<void(const epoll_event&)>;
+    using EventHandler = std::function<void(const Epoller& epoller, const epoll_event&)>;
 
-    Epoller(int connection_fd, int max_events = MAX_EVENT_NUMBER);
+    Epoller(EventWrapper* event_handler, int max_events = MAX_EVENT_NUMBER);
+    ~Epoller();
 
-    void Wait(const EventHandler& event_consumer);
+    void Wait(const EventHandler& event_consumer) const;
 
-    void Add(int fd_to_add, bool restart = false, void* data = nullptr);
-
-    void Remove(int fd_to_remove);
-
-    void Rearm(int old_fd, void* data = nullptr);
-
-    ~Epoller()
-    {
-        utils::Close(fd);
-    }
+    void Add(EventWrapper* event_wrapper) const;
+    void Remove(EventWrapper* event_wrapper) const;
+    void Rearm(EventWrapper* event_wrapper) const;
 
 private:
-    int fd;
+    int epoll_fd;
     int max_events;
 };
 

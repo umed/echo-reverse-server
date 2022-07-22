@@ -5,14 +5,14 @@
 #endif
 
 #include "event_handlers/event_handlers.hpp"
+#include "events/epoller.hpp"
 #include "net/tcp_server.hpp"
 
 #include <CLI/App.hpp>
 #include <CLI/Config.hpp>
 #include <CLI/Formatter.hpp>
-#include <spdlog/spdlog.h>
 
-#include <sys/epoll.h>
+#include "spdlog/spdlog.h"
 
 #include <thread>
 
@@ -58,8 +58,6 @@ void SetupSpdlog()
     spdlog::set_pattern("[%D %T%z] [%^%l%$] [t %t] %v");
 }
 
-
-
 int main(int argc, char** argv)
 {
     CliParams params;
@@ -70,24 +68,33 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     SetupSpdlog();
-    auto server = std::make_unique<net::TcpServer>(params.port, params.max_connection_number);
-
+    net::TcpServer server(params.port, params.max_connection_number);
     SPDLOG_INFO("Starting server on port: {}", params.port);
     SPDLOG_INFO("Maximum of simultaneous connections is set to {}", params.max_connection_number);
-    server->Start();
-    auto server_event_handler = std::make_unique<event_handlers::ServerEventHandler>(std::move(server));
-    SPDLOG_INFO("Setting up epoll events, max events number {}", params.max_event_number);
-    events::Epoller epoller(server_event_handler.get(), params.max_event_number);
-    server_event_handler.release();
+    server.Start();
 
-    auto waiter = [](const events::Epoller& epoller,const epoll_event& event) {
+    SPDLOG_INFO("Setting up epoll events, max events number {}", params.max_event_number);
+    events::Epoller epoller(server.Connection()->fd, params.max_event_number);
+
+    auto waiter = [&epoller, &server](const epoll_event& event) {
         try {
-            SPDLOG_INFO("Handling event...");
-            auto event_handler = static_cast<event_handlers::TcpSocketEventHandler*>(event.data.ptr);
-            event_handler->Handle(epoller, event);
+            SPDLOG_INFO("Event received");
+            if (event_handlers::ShouldCloseConnection(event)) {
+                SPDLOG_INFO("Handle disconnect");
+                event_handlers::HandleDisconnect(epoller, server, event);
+            } else if (static_cast<event_handlers::Consumer*>(event.data.ptr)->client.fd == server.Connection()->fd) {
+                SPDLOG_INFO("Handle connect");
+                event_handlers::HandleConnect(epoller, server, event);
+            } else {
+                event_handlers::HandleClientEvent(epoller, server, event);
+            }
         } catch (const KernelError& e) {
             SPDLOG_ERROR(e.what());
-            exit(1);
+        } catch (const net::ConnectionLost& e) {
+            SPDLOG_WARN("{}. Consumer will be dropped", e.what());
+            if (event.data.fd != server.Connection()->fd) {
+                event_handlers::HandleDisconnect(epoller, server, event);
+            }
         } catch (const std::exception& e) {
             SPDLOG_ERROR(e.what());
         }
@@ -97,7 +104,7 @@ int main(int argc, char** argv)
     SPDLOG_INFO("Number of available threads: {}, will be used: {}", num_threads_available, params.thread_number);
 
     std::vector<std::thread> threads;
-    for (int i = 0; i < 1 /* params.thread_number*/; ++i) {
+    for (int i = 0; i < params.thread_number; ++i) {
         threads.emplace_back([&] {
             epoller.Wait(waiter);
         });
