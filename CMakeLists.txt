@@ -7,6 +7,14 @@ if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "CMAKE_BUILD_TYPE is not defined. ${CMAKE_BUILD_TYPE} will be used.")
 endif()
 
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic")
+
+string (TOLOWER "${CMAKE_BUILD_TYPE}" cmake_build_type_lower_case)
+if (cmake_build_type_lower_case STREQUAL "debug")
+    message(STATUS "Debug mode: enable asan and other handy checks")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover -fstack-protector -fno-omit-frame-pointer")
+endif ()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 

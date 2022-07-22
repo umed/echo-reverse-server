@@ -16,12 +16,6 @@ namespace {
 
 using BufferArray = std::array<uint8_t, 1024>;
 
-void RemoveTcpSocket(net::TcpSocket* tcp_socket)
-{
-    SPDLOG_INFO("Closing connection for fd: {}", tcp_socket->GetFd());
-    delete tcp_socket;
-}
-
 void ReverseEcho(const net::TcpClient* client, const std::vector<uint8_t>& unsent_data)
 {
     BufferArray reversed_buffer;
@@ -52,7 +46,6 @@ net::ClientStatus HandleReadEvent(net::TcpClient* client, std::vector<uint8_t>& 
             break;
         }
         auto bytes_read = std::get<ssize_t>(read_status);
-        int first_index = 0;
         SPDLOG_INFO("Read '{}' bytes from client", bytes_read);
         for (int i = 0; i < bytes_read; ++i) {
             if (buffer[i] == 0) {
@@ -85,12 +78,19 @@ void TcpSocketEventHandler::Handle(const events::Epoller& epoller, const epoll_e
     if (ShouldCloseConnection(event.events)) {
         SPDLOG_INFO("Closing connection for fd: {}", socket->GetFd());
         delete this;
-    } else if (HandleImpl(epoller)) {
-        SPDLOG_INFO("Rearming connection for fd: {}", socket->GetFd());
-        epoller.Rearm(this);
-    } else {
-        SPDLOG_INFO("Closing connection for fd: {}", socket->GetFd());
+    }
+    try {
+        if (HandleImpl(epoller)) {
+            SPDLOG_INFO("Rearming connection for fd: {}", socket->GetFd());
+            epoller.Rearm(this);
+        } else {
+            SPDLOG_INFO("Closing connection for fd: {}", socket->GetFd());
+            delete this;
+        }
+    } catch (const std::exception& e) {
+        SPDLOG_INFO("Something went wrong, closing fd: {}", socket->GetFd());
         delete this;
+        throw;
     }
 }
 

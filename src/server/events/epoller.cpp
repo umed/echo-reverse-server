@@ -18,10 +18,6 @@ using EpollEvents = std::vector<epoll_event>;
 
 constexpr int BLOCK_WAIT_INDEFINITLY = -1;
 
-void HandleEvents(Epoller& epoller, const EpollEvents& events, int size, const Epoller::EventHandler& event_handler)
-{
-}
-
 int RunWaitLoop(int epoll_fd, EpollEvents& events, bool untill_event = true)
 {
     int events_number;

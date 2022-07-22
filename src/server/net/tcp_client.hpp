@@ -8,8 +8,6 @@
 #include <spdlog/spdlog.h>
 
 #include <array>
-#include <stdexcept>
-#include <string_view>
 #include <variant>
 
 #include <sys/socket.h>
@@ -65,7 +63,7 @@ struct TcpClient : public TcpSocket {
                         fmt::format("Failed to send data, unexpected error. errno: {}", std::strerror(errno)));
                 }
             }
-        } while (bytes_sent < count);
+        } while (static_cast<size_t>(bytes_sent) < count);
     }
 };
 

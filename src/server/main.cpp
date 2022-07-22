@@ -22,8 +22,8 @@ struct CliParams {
     CliParams()
         : thread_number(std::thread::hardware_concurrency())
         , max_connection_number(net::MAX_CONNECTION_NUMBER)
-        , port(net::PORT)
         , max_event_number(events::MAX_EVENT_NUMBER)
+        , port(net::PORT)
     {
     }
     int thread_number;
@@ -81,6 +81,9 @@ int main(int argc, char** argv)
     auto waiter = [](const events::Epoller& epoller, const epoll_event& event) {
         try {
             SPDLOG_INFO("Handling event...");
+            if (event.data.ptr == nullptr) {
+                throw KernelError("Unexpected event with empty data");
+            }
             auto event_handler = static_cast<event_handlers::TcpSocketEventHandler*>(event.data.ptr);
             event_handler->Handle(epoller, event);
         } catch (const KernelError& e) {
