@@ -15,9 +15,8 @@ struct TcpSocket;
 
 namespace echo_reverse_server::event_handlers {
 
-
 struct TcpSocketEventHandler : public events::EventWrapper {
-    TcpSocketEventHandler(std::unique_ptr<net::TcpSocket> socket) ;
+    TcpSocketEventHandler(std::unique_ptr<net::TcpSocket> socket);
     virtual ~TcpSocketEventHandler() = default;
     int GetFd();
 

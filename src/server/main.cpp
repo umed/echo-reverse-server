@@ -58,8 +58,6 @@ void SetupSpdlog()
     spdlog::set_pattern("[%D %T%z] [%^%l%$] [t %t] %v");
 }
 
-
-
 int main(int argc, char** argv)
 {
     CliParams params;
@@ -80,7 +78,7 @@ int main(int argc, char** argv)
     events::Epoller epoller(server_event_handler.get(), params.max_event_number);
     server_event_handler.release();
 
-    auto waiter = [](const events::Epoller& epoller,const epoll_event& event) {
+    auto waiter = [](const events::Epoller& epoller, const epoll_event& event) {
         try {
             SPDLOG_INFO("Handling event...");
             auto event_handler = static_cast<event_handlers::TcpSocketEventHandler*>(event.data.ptr);

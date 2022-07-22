@@ -41,7 +41,6 @@ void ReverseEcho(const net::TcpClient* client, const std::vector<uint8_t>& unsen
     client->Write(reversed_buffer, j);
 }
 
-
 net::ClientStatus HandleReadEvent(net::TcpClient* client, std::vector<uint8_t>& unsent_data)
 {
     BufferArray buffer;
@@ -75,13 +74,13 @@ bool ShouldCloseConnection(const uint32_t& events)
 
 } // namespace
 
-
 TcpSocketEventHandler::TcpSocketEventHandler(std::unique_ptr<net::TcpSocket> socket)
     : socket(std::move(socket))
 {
 }
 
-void TcpSocketEventHandler::Handle(const events::Epoller& epoller, const epoll_event& event) {
+void TcpSocketEventHandler::Handle(const events::Epoller& epoller, const epoll_event& event)
+{
     SPDLOG_INFO("Handling event for fd: '{}'", this->GetFd());
     if (ShouldCloseConnection(event.events)) {
         SPDLOG_INFO("Closing connection for fd: {}", socket->GetFd());

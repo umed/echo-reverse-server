@@ -34,7 +34,6 @@ int RunWaitLoop(int epoll_fd, EpollEvents& events, bool untill_event = true)
     return events_number;
 }
 
-
 } // namespace
 
 Epoller::Epoller(EventWrapper* event_wrapper, int max_events)
